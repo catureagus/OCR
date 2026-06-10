@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OCR</title>
+
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    margin:0;
+    padding:15px;
+    background:#f5f5f5;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+}
+
+h2{
+    text-align:center;
+}
+
+button,input,select{
+    width:100%;
+    padding:12px;
+    margin:5px 0;
+    font-size:16px;
+}
+
+textarea{
+    width:100%;
+    height:220px;
+    padding:10px;
+    font-size:15px;
+    resize:vertical;
+}
+
+img{
+    width:100%;
+    margin-top:10px;
+    border-radius:8px;
+}
+
+.status{
+    padding:10px;
+    background:white;
+    border-radius:6px;
+    margin:10px 0;
+}
+
+.row{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+
+.row button{
+    flex:1;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h2>📷 OCR + Translate</h2>
+
+<input type="file"
+       id="imageInput"
+       accept="image/*"
+       capture="environment">
+
+<select id="lang">
+    <option value="eng">English</option>
+    <option value="ara">Arabic</option>
+    <option value="chi_sim">Chinese Simplified</option>
+    <option value="chi_tra">Chinese Traditional</option>
+</select>
+
+<button onclick="startOCR()">
+    🔍 Mulai OCR
+</button>
+
+<div class="status" id="status">
+    Siap
+</div>
+
+<img id="preview">
+
+<h3>Teks Hasil OCR</h3>
+
+<textarea id="ocrText"></textarea>
+
+<div class="row">
+    <button onclick="translateText()">
+        🌍 Translate ke Indonesia
+    </button>
+
+    <button onclick="copyText()">
+        📋 Salin
+    </button>
+</div>
+
+<h3>Hasil Translate</h3>
+
+<textarea id="translatedText"></textarea>
+
+</div>
+
+<script>
+
+let selectedImage=null;
+
+document.getElementById('imageInput')
+.addEventListener('change',function(e){
+
+    selectedImage=e.target.files[0];
+
+    if(!selectedImage) return;
+
+    let reader=new FileReader();
+
+    reader.onload=function(ev){
+        document.getElementById('preview').src=ev.target.result;
+    };
+
+    reader.readAsDataURL(selectedImage);
+});
+
+async function startOCR(){
+
+    if(!selectedImage){
+        alert("Pilih gambar terlebih dahulu");
+        return;
+    }
+
+    let lang=document.getElementById('lang').value;
+
+    document.getElementById('status').innerHTML=
+        "Mengunduh model OCR...";
+
+    const result=await Tesseract.recognize(
+        selectedImage,
+        lang,
+        {
+            logger:m=>{
+                if(m.status){
+
+                    let p='';
+
+                    if(m.progress){
+                        p=' '+Math.round(m.progress*100)+'%';
+                    }
+
+                    document.getElementById('status')
+                    .innerHTML=
+                    m.status+p;
+                }
+            }
+        }
+    );
+
+    document.getElementById('ocrText').value=
+        result.data.text;
+
+    document.getElementById('status').innerHTML=
+        "OCR selesai";
+}
+
+async function translateText(){
+
+    let text=document.getElementById('ocrText').value.trim();
+
+    if(!text){
+        alert("Belum ada teks OCR");
+        return;
+    }
+
+    document.getElementById('status').innerHTML=
+        "Menerjemahkan...";
+
+    try{
+
+        const url=
+        "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=id&dt=t&q="
+        + encodeURIComponent(text);
+
+        const res=await fetch(url);
+
+        const data=await res.json();
+
+        let hasil='';
+
+        data[0].forEach(item=>{
+            hasil+=item[0];
+        });
+
+        document.getElementById('translatedText').value=
+            hasil;
+
+        document.getElementById('status').innerHTML=
+            "Translate selesai";
+
+    }catch(e){
+
+        document.getElementById('status').innerHTML=
+            "Gagal translate";
+    }
+}
+
+function copyText(){
+
+    let txt=
+    document.getElementById('translatedText').value ||
+    document.getElementById('ocrText').value;
+
+    navigator.clipboard.writeText(txt);
+
+    alert("Tersalin");
+}
+
+</script>
+
+</body>
+</html>
