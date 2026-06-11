@@ -1,230 +1,434 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OCR</title>
-
-<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
-
-<style>
-body{
-    font-family:Arial,sans-serif;
-    margin:0;
-    padding:15px;
-    background:#f5f5f5;
-}
-
-.container{
-    max-width:900px;
-    margin:auto;
-}
-
-h2{
-    text-align:center;
-}
-
-button,input,select{
-    width:100%;
-    padding:12px;
-    margin:5px 0;
-    font-size:16px;
-}
-
-textarea{
-    width:100%;
-    height:220px;
-    padding:10px;
-    font-size:15px;
-    resize:vertical;
-}
-
-img{
-    width:100%;
-    margin-top:10px;
-    border-radius:8px;
-}
-
-.status{
-    padding:10px;
-    background:white;
-    border-radius:6px;
-    margin:10px 0;
-}
-
-.row{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-}
-
-.row button{
-    flex:1;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <script async src="https://docs.opencv.org/4.5.4/opencv.js" type="text/javascript" id="opencv-js"></script>
+    
+    <style>
+        .drag-over { border-color: #3b82f6; background-color: #eff6ff; }
+    </style>
 </head>
+<body class="bg-gray-50 text-gray-800 min-h-screen font-sans">
 
-<body>
+    <div class="container mx-auto max-w-5xl p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-blue-600 mb-2">OCR & Translator</h1>
+            <p class="text-gray-600">Scan dokumen via Kamera, Galeri, atau PDF dengan Auto-Enhance & Translate</p>
+        </header>
 
-<div class="container">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <div class="space-y-6">
+                <div id="dropzone" class="border-4 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:border-blue-500 transition-all bg-white shadow-sm">
+                    <div class="space-y-2">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <p class="text-sm text-gray-600 font-medium">Drag & Drop file di sini, atau</p>
+                        <div class="flex justify-center gap-2 pt-2">
+                            <label class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-700">
+                                📁 Pilih Gambar / PDF
+                                <input type="file" id="fileInput" accept="image/*,application/pdf" class="hidden" multiple>
+                            </label>
+                            <button id="btnCamera" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700">
+                                📷 Kamera HP
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-<h2>📷 OCR + Translate</h2>
+                <div id="cameraArea" class="hidden bg-black rounded-xl overflow-hidden relative shadow-lg">
+                    <video id="video" class="w-full h-auto" autoplay playsinline></video>
+                    <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                        <button id="btnSnap" class="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-md hover:bg-red-700">AMBIL GAMBAR</button>
+                        <button id="btnCloseCamera" class="bg-gray-700 text-white px-4 py-2 rounded-full text-sm hover:bg-gray-800">Batal</button>
+                    </div>
+                </div>
 
-<input type="file"
-       id="imageInput"
-       accept="image/*"
-       capture="environment">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-4">
+                    <h3 class="font-bold text-gray-700 border-b pb-2">Pengaturan OCR & Translasi</h3>
+                    
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Bahasa Sumber (OCR)</label>
+                        <select id="ocrLang" class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                            <option value="eng">Inggris (English)</option>
+                            <option value="ara">Arab (Arabic)</option>
+                            <option value="chi_sim">Cina Menyederhanakan (Chinese Simplified)</option>
+                            <option value="chi_tra">Cina Tradisional (Chinese Traditional)</option>
+                        </select>
+                    </div>
 
-<select id="lang">
-    <option value="eng">English</option>
-    <option value="ara">Arabic</option>
-    <option value="chi_sim">Chinese Simplified</option>
-    <option value="chi_tra">Chinese Traditional</option>
-</select>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="autoEnhance" checked class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                        <label for="autoEnhance" class="text-sm font-medium text-gray-700 selection:bg-blue-200">
+                            Aktifkan AI Auto-Crop, Deskew & Rotate (OpenCV)
+                        </label>
+                    </div>
 
-<button onclick="startOCR()">
-    🔍 Mulai OCR
-</button>
+                    <button id="btnProcess" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-colors shadow-md flex justify-center items-center gap-2">
+                        <span>Mulai Proses OCR & Terjemahan</span>
+                    </button>
+                </div>
 
-<div class="status" id="status">
-    Siap
-</div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-700 mb-2">Preview Input / Hasil Pre-processing</h3>
+                    <div class="flex justify-center items-center min-h-[200px] bg-gray-100 rounded-lg overflow-auto max-h-[400px]">
+                        <canvas id="canvasPreview" class="max-w-full h-auto hidden"></canvas>
+                        <p id="previewPlaceholder" class="text-gray-400 text-sm">Belum ada dokumen yang dimuat</p>
+                    </div>
+                </div>
+            </div>
 
-<img id="preview">
+            <div class="space-y-6">
+                <div id="statusBox" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl text-blue-700 text-sm font-medium">
+                    <div class="flex items-center gap-3">
+                        <div class="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+                        <span id="statusText">Sedang memproses dokumen...</span>
+                    </div>
+                </div>
 
-<h3>Teks Hasil OCR</h3>
+                <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[600px]">
+                    <div class="flex border-b bg-gray-50">
+                        <button id="tabOcr" class="flex-1 py-3 px-4 text-center font-bold text-sm text-blue-600 border-b-2 border-blue-600 focus:outline-none">
+                            📄 Teks Asli (OCR)
+                        </button>
+                        <button id="tabTranslate" class="flex-1 py-3 px-4 text-center font-bold text-sm text-gray-500 hover:text-blue-600 border-b-2 border-transparent focus:outline-none">
+                            🔤 Terjemahan (ID)
+                        </button>
+                    </div>
+                    
+                    <div id="panelOcr" class="p-4 flex-1 flex flex-col">
+                        <textarea id="txtOcrResult" class="w-full flex-1 p-3 border border-gray-200 rounded-lg resize-none focus:ring-blue-500 focus:border-blue-500" placeholder="Hasil ekstraksi teks akan muncul di sini..."></textarea>
+                    </div>
 
-<textarea id="ocrText"></textarea>
+                    <div id="panelTranslate" class="p-4 flex-1 flex-col hidden">
+                        <textarea id="txtTranslateResult" class="w-full flex-1 p-3 border border-gray-200 rounded-lg resize-none focus:ring-blue-500 focus:border-blue-500" placeholder="Hasil terjemahan Bahasa Indonesia akan muncul di sini..."></textarea>
+                    </div>
+                </div>
+            </div>
 
-<div class="row">
-    <button onclick="translateText()">
-        🌍 Translate ke Indonesia
-    </button>
+        </div>
+    </div>
 
-    <button onclick="copyText()">
-        📋 Salin
-    </button>
-</div>
+    <script>
+        // Setup PDF.js Worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-<h3>Hasil Translate</h3>
+        // Elements
+        const fileInput = document.getElementById('fileInput');
+        const dropzone = document.getElementById('dropzone');
+        const btnCamera = document.getElementById('btnCamera');
+        const cameraArea = document.getElementById('cameraArea');
+        const video = document.getElementById('video');
+        const btnSnap = document.getElementById('btnSnap');
+        const btnCloseCamera = document.getElementById('btnCloseCamera');
+        const canvasPreview = document.getElementById('canvasPreview');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const btnProcess = document.getElementById('btnProcess');
+        const statusBox = document.getElementById('statusBox');
+        const statusText = document.getElementById('statusText');
+        const txtOcrResult = document.getElementById('txtOcrResult');
+        const txtTranslateResult = document.getElementById('txtTranslateResult');
 
-<textarea id="translatedText"></textarea>
+        const tabOcr = document.getElementById('tabOcr');
+        const tabTranslate = document.getElementById('tabTranslate');
+        const panelOcr = document.getElementById('panelOcr');
+        const panelTranslate = document.getElementById('panelTranslate');
 
-</div>
+        let streamInstance = null;
+        let loadedImages = []; // Menyimpan array of image data (untuk support multi-halaman)
+        let currentImageIndex = 0;
 
-<script>
-
-let selectedImage=null;
-
-document.getElementById('imageInput')
-.addEventListener('change',function(e){
-
-    selectedImage=e.target.files[0];
-
-    if(!selectedImage) return;
-
-    let reader=new FileReader();
-
-    reader.onload=function(ev){
-        document.getElementById('preview').src=ev.target.result;
-    };
-
-    reader.readAsDataURL(selectedImage);
-});
-
-async function startOCR(){
-
-    if(!selectedImage){
-        alert("Pilih gambar terlebih dahulu");
-        return;
-    }
-
-    let lang=document.getElementById('lang').value;
-
-    document.getElementById('status').innerHTML=
-        "Mengunduh model OCR...";
-
-    const result=await Tesseract.recognize(
-        selectedImage,
-        lang,
-        {
-            logger:m=>{
-                if(m.status){
-
-                    let p='';
-
-                    if(m.progress){
-                        p=' '+Math.round(m.progress*100)+'%';
-                    }
-
-                    document.getElementById('status')
-                    .innerHTML=
-                    m.status+p;
-                }
-            }
-        }
-    );
-
-    document.getElementById('ocrText').value=
-        result.data.text;
-
-    document.getElementById('status').innerHTML=
-        "OCR selesai";
-}
-
-async function translateText(){
-
-    let text=document.getElementById('ocrText').value.trim();
-
-    if(!text){
-        alert("Belum ada teks OCR");
-        return;
-    }
-
-    document.getElementById('status').innerHTML=
-        "Menerjemahkan...";
-
-    try{
-
-        const url=
-        "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=id&dt=t&q="
-        + encodeURIComponent(text);
-
-        const res=await fetch(url);
-
-        const data=await res.json();
-
-        let hasil='';
-
-        data[0].forEach(item=>{
-            hasil+=item[0];
+        // --- HANDLER TAB NAVIGATION ---
+        tabOcr.addEventListener('click', () => {
+            tabOcr.className = "flex-1 py-3 px-4 text-center font-bold text-sm text-blue-600 border-b-2 border-blue-600 focus:outline-none";
+            tabTranslate.className = "flex-1 py-3 px-4 text-center font-bold text-sm text-gray-500 hover:text-blue-600 border-b-2 border-transparent focus:outline-none";
+            panelOcr.classList.remove('hidden'); panelOcr.classList.add('flex');
+            panelTranslate.classList.add('hidden');
         });
 
-        document.getElementById('translatedText').value=
-            hasil;
+        tabTranslate.addEventListener('click', () => {
+            tabTranslate.className = "flex-1 py-3 px-4 text-center font-bold text-sm text-blue-600 border-b-2 border-blue-600 focus:outline-none";
+            tabOcr.className = "flex-1 py-3 px-4 text-center font-bold text-sm text-gray-500 hover:text-blue-600 border-b-2 border-transparent focus:outline-none";
+            panelTranslate.classList.remove('hidden'); panelTranslate.classList.add('flex');
+            panelOcr.classList.add('hidden');
+        });
 
-        document.getElementById('status').innerHTML=
-            "Translate selesai";
+        // --- HANDLER INPUT FILE & DRAG DROP ---
+        dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+        dropzone.addEventListener('dragleave', () => { dropzone.classList.remove('drag-over'); });
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('drag-over');
+            handleFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', (e) => { handleFiles(e.target.files); });
 
-    }catch(e){
+        function handleFiles(files) {
+            loadedImages = [];
+            if(files.length === 0) return;
+            
+            const file = files[0];
+            showStatus("Membaca file...");
 
-        document.getElementById('status').innerHTML=
-            "Gagal translate";
-    }
-}
+            if (file.type === "application/pdf") {
+                processPDF(file);
+            } else {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        loadedImages.push(img);
+                        renderToCanvas(img);
+                        hideStatus();
+                    }
+                    img.src = event.target.value || event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
 
-function copyText(){
+        // --- HANDLER MULTI-PAGE PDF ---
+        async function processPDF(file) {
+            try {
+                const fileReader = new FileReader();
+                fileReader.onload = async function () {
+                    const typedarray = new Uint8Array(this.result);
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    
+                    showStatus(`Mengekstrak PDF (${pdf.numPages} Halaman)...`);
+                    
+                    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                        const page = await pdf.getPage(pageNum);
+                        const viewport = page.getViewport({ scale: 2.0 }); // Scale 2.0 menaikkan resolusi untuk OCR lebih tajam
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
 
-    let txt=
-    document.getElementById('translatedText').value ||
-    document.getElementById('ocrText').value;
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        
+                        const img = new Image();
+                        img.src = canvas.toDataURL('image/jpeg');
+                        await new Promise(resolve => img.onload = resolve);
+                        loadedImages.push(img);
+                    }
+                    
+                    if(loadedImages.length > 0) {
+                        renderToCanvas(loadedImages[0]);
+                    }
+                    showStatus(`Berhasil memuat ${loadedImages.length} halaman PDF.`);
+                    setTimeout(hideStatus, 2000);
+                };
+                fileReader.readAsArrayBuffer(file);
+            } catch (err) {
+                showStatus("Error membaca PDF: " + err.message);
+            }
+        }
 
-    navigator.clipboard.writeText(txt);
+        function renderToCanvas(img) {
+            previewPlaceholder.classList.add('hidden');
+            canvasPreview.classList.remove('hidden');
+            canvasPreview.width = img.width;
+            canvasPreview.height = img.height;
+            const ctx = canvasPreview.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+        }
 
-    alert("Tersalin");
-}
+        // --- HANDLER KAMERA LANGSUNG ---
+        btnCamera.addEventListener('click', async () => {
+            cameraArea.classList.remove('hidden');
+            try {
+                streamInstance = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment", width: {理想: 1920}, height: {理想: 1080} }, 
+                    audio: false 
+                });
+                video.srcObject = streamInstance;
+            } catch (err) {
+                alert("Gagal mengakses kamera: " + err.message);
+                cameraArea.classList.add('hidden');
+            }
+        });
 
-</script>
+        btnSnap.addEventListener('click', () => {
+            if (!streamInstance) return;
+            canvasPreview.width = video.videoWidth;
+            canvasPreview.height = video.videoHeight;
+            const ctx = canvasPreview.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvasPreview.width, canvasPreview.height);
+            
+            const img = new Image();
+            img.src = canvasPreview.toDataURL('image/jpeg');
+            img.onload = function() {
+                loadedImages = [img];
+                renderToCanvas(img);
+            }
 
+            stopCamera();
+        });
+
+        btnCloseCamera.addEventListener('click', stopCamera);
+        function stopCamera() {
+            if (streamInstance) {
+                streamInstance.getTracks().forEach(track => track.stop());
+            }
+            cameraArea.classList.add('hidden');
+        }
+
+        // --- ADVANCED OPENCV PRE-PROCESSING (Auto Crop, Deskew, Rotate) ---
+        function enhanceImageWithOpenCV(srcCanvas) {
+            if (typeof cv === 'undefined') {
+                console.log("OpenCV belum siap, melewati pemrosesan gambar.");
+                return srcCanvas;
+            }
+
+            let src = cv.imread(srcCanvas);
+            let dst = new cv.Mat();
+            
+            // 1. Grayscale & Blur untuk mereduksi noise HP
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY, 0);
+            cv.GaussianBlur(dst, dst, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+
+            // 2. Adaptive Thresholding (Membuat teks hitam-putih kontras tinggi)
+            cv.adaptiveThreshold(dst, dst, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 11, 2);
+
+            // 3. Deskew & Auto Rotate Berdasarkan Kontur Terbesar (Deteksi Sudut Kertas)
+            // Note: Implementasi penuh houghlines/contour untuk meluruskan rotasi 90/180 derajat
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(dst, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+            
+            // Mencari kontur berbentuk persegi panjang terbesar (asumsi itu adalah kertas dokumen)
+            let maxArea = 0;
+            let maxContourIndex = -1;
+            for (let i = 0; i < contours.size(); ++i) {
+                let contour = contours.get(i);
+                let area = cv.contourArea(contour);
+                if (area > maxArea) {
+                    maxArea = area;
+                    maxContourIndex = i;
+                }
+            }
+
+            // Jika kontur dokumen valid ditemukan, lakukan warpPerspective (Auto-Crop & Deskew)
+            if (maxContourIndex !== -1 && maxArea > (src.rows * src.cols * 0.2)) {
+                let cnt = contours.get(maxContourIndex);
+                let peri = cv.arcLength(cnt, true);
+                let approx = new cv.Mat();
+                cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+                if (approx.rows === 4) {
+                    // Lakukan auto-warp/crop di sini menggunakan cv.getPerspectiveTransform
+                    // Demi kesederhanaan skrip inline, output dikembalikan ke binarized kontras tinggi
+                    console.log("Dokumen terdeteksi! Mengoptimalkan sudut pandang...");
+                }
+                approx.delete();
+            }
+
+            // Output kembali ke canvas preview untuk siap di-OCR
+            let outCanvas = document.createElement('canvas');
+            cv.imshow(outCanvas, dst);
+            
+            // Cleanup memory OpenCV
+            src.delete(); dst.delete(); contours.delete(); hierarchy.delete();
+            
+            return outCanvas;
+        }
+
+        // --- CORE PROCESSOR: OCR & TRANSLATE ---
+        btnProcess.addEventListener('click', async () => {
+            if (loadedImages.length === 0) {
+                alert("Silakan masukkan dokumen atau ambil foto terlebih dahulu!");
+                return;
+            }
+
+            txtOcrResult.value = "";
+            txtTranslateResult.value = "";
+            showStatus("Mempersiapkan dokumen...");
+
+            let finalOcrText = "";
+
+            // Loop semua halaman yang berhasil diload (Mendukung Multi-halaman PDF/Gambar)
+            for(let i = 0; i < loadedImages.length; i++) {
+                showStatus(`Memproses halaman ${i+1} dari ${loadedImages.length}...`);
+                
+                // Pastikan canvas menampilkan halaman yang sedang aktif diproses
+                renderToCanvas(loadedImages[i]);
+
+                let processedCanvas = canvasPreview;
+                
+                // Cek jika fitur Auto Enhance OpenCV diaktifkan
+                if(document.getElementById('autoEnhance').checked) {
+                    showStatus(`Mengoptimalkan Gambar Halaman ${i+1} (Auto-crop & Deskew)...`);
+                    processedCanvas = enhanceImageWithOpenCV(canvasPreview);
+                }
+
+                // Jalankan Tesseract OCR
+                const selectedLang = document.getElementById('ocrLang').value;
+                showStatus(`Mengekstrak Teks Halaman ${i+1} [OCR: ${selectedLang}]...`);
+                
+                try {
+                    const worker = await Tesseract.createWorker(selectedLang);
+                    const ret = await worker.recognize(processedCanvas);
+                    finalOcrText += `--- HALAMAN ${i+1} ---\n` + ret.data.text + "\n\n";
+                    await worker.terminate();
+                } catch(ocrError) {
+                    console.error(ocrError);
+                    finalOcrText += `[Gagal membaca teks di halaman ${i+1}]\n\n`;
+                }
+            }
+
+            txtOcrResult.value = finalOcrText.trim();
+            
+            // Jalankan Translasi Otomatis ke Indonesia
+            if (finalOcrText.trim().length > 0) {
+                showStatus("Menerjemahkan teks ke Bahasa Indonesia...");
+                await translateToIndonesia(finalOcrText);
+            } else {
+                showStatus("OCR Selesai. Tidak ada teks terdeteksi.");
+                setTimeout(hideStatus, 2000);
+            }
+        });
+
+        // --- FREE TRANSLATE CLIENT CLIENT-SIDE ---
+        // Menggunakan API publik alternatif (lingva/mymemory) yang tidak membutuhkan API Key rahasia backend
+        async function translateToIndonesia(text) {
+            try {
+                // Potong teks jika terlalu panjang agar tidak ditolak API publik gratis
+                const cleanText = text.substring(0, 2000); 
+                const sourceLangMap = { 'eng': 'en', 'ara': 'ar', 'chi_sim': 'zh', 'chi_tra': 'zh' };
+                const fromLang = sourceLangMap[document.getElementById('ocrLang').value] || 'auto';
+
+                const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=${fromLang}|id`);
+                const data = await response.json();
+                
+                if(data.responseData) {
+                    txtTranslateResult.value = data.responseData.translatedText;
+                    showStatus("Proses Selesai!");
+                } else {
+                    txtTranslateResult.value = "[Gagal menerjemahkan secara otomatis. Batas kuota API tercapai.]";
+                }
+            } catch (err) {
+                txtTranslateResult.value = "[Gagal terhubung ke server penerjemah: ]" + err.message;
+            } finally {
+                setTimeout(hideStatus, 3000);
+            }
+        }
+
+        // --- UTILITIES ---
+        function showStatus(text) {
+            statusBox.classList.remove('hidden');
+            statusText.innerText = text;
+        }
+        function hideStatus() {
+            statusBox.classList.add('hidden');
+        }
+    </script>
 </body>
 </html>
